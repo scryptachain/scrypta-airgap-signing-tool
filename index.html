@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Scrypta - Airgap Signing Tool</title>
+    <link rel="icon" type="image/png" href="/logo.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="https://unpkg.com/buefy/dist/buefy.min.css">
+</head>
+
+<body>
+    <div id="app">
+        <div class="container text-center">
+            <section class="hero">
+                <div class="hero-body">
+                  <div class="container">
+                    <h1 class="title">
+                      Airgap Signing Tool
+                    </h1>
+                    <h2 class="subtitle">
+                      Create a message and sign it with your Manent.
+                    </h2>
+                  </div>
+                </div>
+              </section>
+              <section>
+                <qrcode :value="JSON.stringify(message)" :options="{ color: { dark: '#000' }, margin: 0, width: 300 }"></qrcode>
+                <br><br>
+                <b-field>
+                    <b-input 
+                        v-model="message.tosign.message"
+                        v-on:input="calculateSha"
+                        placeholder="Write a message here"
+                        size="is-medium">
+                    </b-input>
+                </b-field>
+                <pre style="text-align:left;">{{ message }}</pre>
+                <br>
+                <b-button type="is-primary" v-clipboard:copy="JSON.stringify(message.tosign)" v-clipboard:success="onCopy" v-clipboard:error="onError">Copy message</b-button>
+                <br><br>
+                <b-notification :closable="false">
+                    <pre style="text-align: left;">{{ result }}</pre>
+                    <b-loading :is-full-page="isFullPage" :active.sync="isLoading" :can-cancel="true"></b-loading>
+                </b-notification>
+              </section>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/vue"></script>
+    <script src="https://unpkg.com/buefy/dist/buefy.min.js"></script>
+    <script src="/components/vue-qrcode.min.js"></script>
+    <script src="/components/sha256.min.js"></script>
+    <script src="/components/vue-clipboard.min.js"></script>
+    <script src="https://unpkg.com/uuid@latest/dist/umd/uuidv4.min.js"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+
+    <style>
+        .text-center{
+            text-align: center;
+        }
+    </style>
+    <script>
+        Vue.component(VueQrcode.name, VueQrcode);
+        new Vue({
+            el: '#app',
+            data: {
+                isLoading: true,
+                isFullPage: false,
+                axios: window.axios,
+                result: 'Waiting for message from someone, if you want to test it open Manent and go to "Sign" section.',
+                message: {
+                    tosign: {
+                        message: "Write a message here",
+                        uuid: '-'
+                    },
+                    hash: '-'
+                }
+            },
+            mounted () {
+                const app = this
+                app.message.tosign.uuid = uuidv4()
+                app.calculateSha()
+                setInterval(app.checkWrite, 10000)
+            },
+            methods: {
+                calculateSha(){
+                    const app = this
+                    app.message.hash = sha256(JSON.stringify(app.message.tosign))
+                },
+                async checkWrite(){
+                    const app = this
+                    let response = await app.axios.post('https://idanodejs01.scryptachain.org/read')
+                    let written = response.data.data
+                    for(let x in written){
+                        let data = written[x]
+                        if(JSON.stringify(data.data) === JSON.stringify(app.message.tosign)){
+                            app.isLoading = false
+                            app.result = data
+                            this.$buefy.toast.open({
+                                message: data.address + ' wrote the data!',
+                                type: 'is-success'
+                            })
+                        }
+                    }
+                },
+                onCopy() {
+                    this.$buefy.toast.open({
+                        message: 'Copied correctly!',
+                        type: 'is-success'
+                    })
+                },
+                onError() {
+                    this.$buefy.toast.open({
+                        duration: 5000,
+                        message: 'Copy failed',
+                        position: 'is-bottom',
+                        type: 'is-danger'
+                    })
+                }
+            }
+        })
+    </script>
+</body>
+</html>
